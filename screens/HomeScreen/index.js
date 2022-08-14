@@ -12,6 +12,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BarCodeScanner } from "expo-barcode-scanner";
 import Web3 from "web3";
 
+const META_MASK_WALLET_PREFIX = "ethereum:";
+
 const web3 = new Web3();
 web3.setProvider(
   new web3.providers.HttpProvider(
@@ -59,7 +61,14 @@ const HomeScreen = (props) => {
   };
 
   const handleBarCodeScanned = ({ data }) => {
+    const isMetaMaskWallet = data.indexOf(META_MASK_WALLET_PREFIX) > -1;
+
+    const nextAddress = isMetaMaskWallet
+      ? data.substring(META_MASK_WALLET_PREFIX.length)
+      : data;
+
     setScanned(false);
+    navigation.push("SendETH", { reciverAddress: nextAddress });
   };
 
   useEffect(() => {

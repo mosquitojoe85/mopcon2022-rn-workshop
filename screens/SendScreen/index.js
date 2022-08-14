@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Alert, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import Icon from "@expo/vector-icons/Feather";
+import { Buffer } from "buffer";
+import EthereumTx from "ethereumjs-tx";
+import Web3 from "web3";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const web3 = new Web3();
+web3.setProvider(
+  new web3.providers.HttpProvider(
+    "https://ropsten.infura.io/v3/dea49333d33447559dbd2a21ef3f6cc2"
+  )
+);
+
+const removeAddressPrefix = (address) => {
+  if (address.indexOf("0x") === -1) return address;
+
+  return address.substring(2);
+};
 
 const SendETHScreen = (props) => {
   const [state, setState] = useState({
@@ -26,12 +43,111 @@ const SendETHScreen = (props) => {
     });
   };
 
-  const handleSendETH = () => {
-    console.log("發送 Eth");
+  const transferEther = async (reciverAddress) => {
+    const reciverAddressNoPrefix = removeAddressPrefix(reciverAddress);
+
+    try {
+      if (
+        reciverAddress.length !== 42 ||
+        reciverAddress === undefined ||
+        web3.utils.isAddress(reciverAddressNoPrefix) === false
+      ) {
+        Alert.alert(
+          "Wrong Ethereum Address!",
+          "The Ethereum address you entered is not valid!",
+          [{ text: "OK", onPress: () => console.log() }]
+        );
+        return;
+      }
+      const { account } = state;
+      alert(JSON.stringify(account));
+      const privateKey = Buffer.from(
+        removeAddressPrefix(account.privateKey),
+        "hex"
+      );
+      const count = await web3.eth.getTransactionCount(account.address);
+      const gasPriceGwei = 3;
+      const gasLimit = 3000000;
+
+      const newAmount = 1000000000000000000 * Number(state.amount);
+      const rawTransaction = {
+        from: account.address,
+        to: reciverAddress,
+        value: web3.utils.toHex(newAmount),
+        gasPrice: web3.utils.toHex(gasPriceGwei * 1e9),
+        gasLimit: web3.utils.toHex(gasLimit),
+        nonce: "0x" + count.toString(16),
+      };
+      const tx = new EthereumTx(rawTransaction, {
+        chain: "ropsten",
+        hardfork: "petersburg",
+      });
+
+      // sign transaction with private key
+      tx.sign(privateKey);
+      const serializedTx = tx.serialize();
+
+      await web3.eth.sendSignedTransaction("0x" + serializedTx.toString("hex"));
+      Alert.alert("Sent successfully!", "", [
+        { text: "OK", onPress: () => false },
+      ]);
+    } catch (error) {
+      Alert.alert("Insufficient funds!", error.message, [
+        { text: "OK", onPress: () => console.log(error) },
+      ]);
+    }
+  };
+
+  const getETHBalance = async (address) => {
+    const balance = await web3.eth.getBalance(address);
+    const nextBalance = web3.utils.fromWei(balance, "ether");
+    return Number(nextBalance).toFixed(3);
   };
 
   const checkWallet = async () => {
-    console.log("檢查錢包狀態");
+    const accountStr = await AsyncStorage.getItem("account");
+    if (accountStr) {
+      const account = JSON.parse(accountStr);
+      const balance = await getETHBalance(account.address);
+      setState({
+        account,
+        ETHBalance: balance,
+        isLoading: false,
+        amount: "",
+      });
+    } else {
+      navigation.replace("Welcome");
+    }
+  };
+
+  const handleSendETH = () => {
+    const { route } = props;
+    if (route && route.params && route.params.reciverAddress) {
+      const { params } = route;
+      Alert.alert("Receiver Address", `轉帳到: ${params.reciverAddress}`, [
+        {
+          text: "Cancel",
+          onPress: () => console.log("Cancel Pressed"),
+          style: "cancel",
+        },
+        {
+          text: "OK",
+          onPress: () => transferEther(params.reciverAddress),
+        },
+      ]);
+    } else {
+      Alert.prompt("Receiver Address", "請輸入", [
+        {
+          text: "Cancel",
+          onPress: () => console.log("Cancel Pressed"),
+          style: "cancel",
+        },
+        {
+          text: "OK",
+          onPress: (address) => transferEther(address),
+        },
+      ]);
+    }
   };
 
   useEffect(() => {
