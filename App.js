@@ -1,5 +1,6 @@
+import "./global";
 import { useState, useEffect } from "react";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import HomeScreen from "./screens/HomeScreen";
 import WelcomeScreen from "./screens/WelcomeScreen";
 import SendScreen from "./screens/SendScreen";
